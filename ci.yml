@@ -1,0 +1,28 @@
+name: CI/CD
+on:
+  push: {branches: [main]}
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: {service: [inventory, orders, notifications]}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install -r ${{ matrix.service }}/requirements.txt pytest
+      - run: cd ${{ matrix.service }} && python -m pytest -q
+  deploy:
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: appleboy/ssh-action@v1.0.3   # needs EC2_HOST / EC2_USER / EC2_SSH_KEY repo secrets
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/order-microservices && git pull origin main
+            docker compose up -d --build
